@@ -95,12 +95,12 @@ export class AuthService {
     };
 
     const accessToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_SECRET!,
+      secret: process.env.JWT_ACCESS_SECRET!,
       expiresIn: '15m',
     });
 
     const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_SECRET!,
+      secret: process.env.JWT_REFRESH_SECRET!,
       expiresIn: '7d',
     });
 
@@ -125,7 +125,7 @@ export class AuthService {
 
   async refreshToken(refreshToken: string) {
     const payload = await this.jwtService.verifyAsync(refreshToken, {
-      secret: process.env.JWT_SECRET!,
+      secret: process.env.JWT_REFRESH_SECRET!,
     });
 
     const user = await this.prisma.user.findUnique({
