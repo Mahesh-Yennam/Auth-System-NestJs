@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   ConflictException,
@@ -67,19 +69,103 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const passwordMatches = await bcrypt.compare(password, user.password);
 
-    if (!isPasswordValid) {
+    if (!passwordMatches) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload = {
-      sub: user.id,
-      email: user.email,
-    };
+    const { accessToken, refreshToken } = await this.generateTokens(
+      user.id,
+      user.email,
+    );
+
+    await this.updateRefreshToken(user.id, refreshToken);
 
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
+  }
+
+  private async generateTokens(userId: string, email: string) {
+    const payload = {
+      sub: userId,
+      email,
+    };
+
+    const accessToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.JWT_SECRET!,
+      expiresIn: '15m',
+    });
+
+    const refreshToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.JWT_SECRET!,
+      expiresIn: '7d',
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+    };
+  }
+
+  private async updateRefreshToken(userId: string, refreshToken: string) {
+    const hashedToken = await bcrypt.hash(refreshToken, 10);
+
+    await this.prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        hashedRefreshToken: hashedToken,
+      },
+    });
+  }
+
+  async refreshToken(refreshToken: string) {
+    const payload = await this.jwtService.verifyAsync(refreshToken, {
+      secret: process.env.JWT_SECRET!,
+    });
+
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: payload.sub,
+      },
+    });
+
+    if (!user || !user.hashedRefreshToken) {
+      throw new UnauthorizedException();
+    }
+
+    const valid = await bcrypt.compare(refreshToken, user.hashedRefreshToken);
+
+    if (!valid) {
+      throw new UnauthorizedException();
+    }
+
+    const tokens = await this.generateTokens(user.id, user.email);
+
+    await this.updateRefreshToken(user.id, tokens.refreshToken);
+
+    return {
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+    };
+  }
+
+  async logout(userId: string) {
+    await this.prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        hashedRefreshToken: null,
+      },
+    });
+
+    return {
+      message: 'Logged out successfully',
     };
   }
 }
