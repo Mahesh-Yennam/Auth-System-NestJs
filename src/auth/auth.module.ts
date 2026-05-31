@@ -9,16 +9,18 @@ import { JwtModule } from '@nestjs/jwt';
 
 import { JwtStrategy } from './strategies/jwt.strategy';
 
+import { ConfigModule, ConfigService } from '@nestjs/config';
+
 @Module({
   imports: [
     UsersModule,
 
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-
-      signOptions: {
-        expiresIn: '1d',
-      },
+    ConfigModule,
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
+      }),
     }),
   ],
 

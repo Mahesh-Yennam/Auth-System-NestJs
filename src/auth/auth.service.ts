@@ -14,12 +14,14 @@ import { LoginDto } from './dto/login.dto';
 import * as bcrypt from 'bcrypt';
 
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -95,12 +97,12 @@ export class AuthService {
     };
 
     const accessToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_ACCESS_SECRET!,
+      secret: this.configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
       expiresIn: '15m',
     });
 
     const refreshToken = await this.jwtService.signAsync(payload, {
-      secret: process.env.JWT_REFRESH_SECRET!,
+      secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       expiresIn: '7d',
     });
 
@@ -125,7 +127,7 @@ export class AuthService {
 
   async refreshToken(refreshToken: string) {
     const payload = await this.jwtService.verifyAsync(refreshToken, {
-      secret: process.env.JWT_REFRESH_SECRET!,
+      secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
     });
 
     const user = await this.prisma.user.findUnique({
